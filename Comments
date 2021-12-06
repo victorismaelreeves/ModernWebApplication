@@ -1,0 +1,31 @@
+@foreach ($futureWeather['list'] as $weather)
+    <li class="grid grid-cols-weather items-center">
+        <div class="text-gray-400">{{ strtoupper(\Carbon\Carbon::createFromTimestamp($weather['dt'])->format('D')) }}</div>
+        <div class="flex items-center">
+            <div>
+                <img src="http://openweathermap.org/img/wn/{{ $weather['weather'][0]['icon'] }}.png" alt="icon">
+            </div>
+            <div>{{ ucfirst($weather['weather'][0]['description']) }}</div>
+        </div>
+        <div class="text-right text-xs">
+            <div>{{ round($weather['temp']['max']) }}&#176;C</div>
+            <div>{{ round($weather['temp']['min']) }}&#176;C</div>
+        </div>
+    </li>
+@endforeach
+
+
+Route::get('/', function () {
+    $location = 'Madrid';
+    $apiKey = "69d77c6946b3db7f9bc16617d3d68108";
+
+    $response = Http::get("https://api.openweathermap.org/data/2.5/weather?q={$location}&appid={$apiKey}&units=metric");
+    $responseFuture = Http::get("https://api.openweathermap.org/data/2.5/forecast/daily?q={$location}&cnt=7&appid={$apiKey}&units=metric");
+
+    dump($responseFuture->json());
+
+    return view('welcome', [
+        'currentWeather' => $response->json(),
+        'futureWeather' => $responseFuture->json(),
+    ]);
+});
