@@ -2,138 +2,98 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Author;
+use App\Models\Book;
+use App\Models\Photo;
 use Illuminate\Http\Request;
-use App\Book;
-use App\Author;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
+use phpDocumentor\Reflection\Types\Collection;
+use Psy\TabCompletion\AutoCompleter;
+use Illuminate\Http\RedirectResponse;
+use Symfony\Component\Routing\Matcher\RedirectableUrlMatcher;
 
 class BookController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index()
+    public function __construct()
     {
-        $books = Book::detailedList();
 
-        return view('books.index', ['books' => $books]);
     }
 
-    /**
-     * Display the home page
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function home()
+    public function index(Request $request)
     {
-        $books = $books = Book::detailedList(6);
+        $sort_by = $request->input('sort_by', 'id');
+        $order = $request->input('order', 'ASC');
+        $paginate = $request->input('paginate', 5);
+        $books = Book::leftJoin('authors', 'authors.id', '=', 'books.author_id')
+            ->select(['books.id', 'books.title', 'books.pages', 'authors.name as author_name'])
+            ->orderBy($sort_by, $order)
+            ->paginate($paginate);
 
-        $authors = Author::orderBy('id', 'desc')->limit(3)->get();
-
-        return view('home', [
-            'books' => $books,
-            'authors' => $authors
-        ]);
+        return view('books', ['books' => $books, 'keys' => ['id', 'title', 'pages', 'author_name']]);
     }
 
-
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
+    public function get(int $id)
     {
-        $authors = Author::orderBy('id', 'desc')->get();
-
-        return view('books.form', ['authors' => $authors]);
+        $book = Book::findOrFail($id);
+        $book->author_name = $book->author->name;
+        $book = $book->makeHidden('author')->toArray();
+        return view('book_details', ['book' => $book, 'keys' => ['id', 'title', 'pages', 'author_name']]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function save(Request $request, int $id = null)
     {
-        $request->validate([
-            'title'=>'required',
-            'author'=> 'required|integer',
-        ]);
-        $book = new Book([
-            'title' => $request->get('title'),
-            'author_id'=> $request->get('author'),
-        ]);
-        $book->save();
-        return redirect('/books')->with('success', 'Book has been added');
-    }
+        $fields = $request->toArray();
+        if(isset($fields['_token'])){
+            unset($fields['_token']);
+        }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function show(Book $book)
-    {
-        return $book;
-    }
+        if($id === null){
+            $book = Book::factory()->create($fields);
+        } else{
+            $book = Book::findOrFail($id);
+            foreach ($fields as $key => $val){
+                $book->$key = $val;
+            }
+            $book->save();
+        }
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function edit($id)
-    {
-        $book = Book::find($id);
-        $authors = Author::orderBy('id', 'desc')->get();
-
-        return view(
-            'books.form_edit',
-            [
-                'book' => $book,
-                'authors' => $authors
-            ]
+        return redirect()->action(
+            [BookController::class, 'get'], ['id' => $book->id]
         );
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $idr
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
+    public function delete(int $id)
     {
-        $request->validate([
-            'title'       => 'required',
-            'author' => 'required|integer',
-        ]);
+        $book = Book::findOrFail($id);
 
-        $book = Book::find($id);
-        $book->title = $request->get('title');
-        $book->author_id = $request->get('author');
-        $book->save();
-
-        return redirect('/books')->with('success', 'Book has been updated');
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy($id)
-    {
-        $book = Book::find($id);
+        $book->photos()->delete();
         $book->delete();
 
-        return redirect('/books')->with('success', 'Book has been deleted');
+        return redirect()->action([BookController::class, 'index']);
     }
+
+    public function edit(int $id)
+    {
+        $book = Book::findOrFail($id);
+        $authors = AuthorController::getAll();
+        return view('edit_book', ['id' => $id, 'title' => $book->title, 'pages' => $book->pages, 'author_id' => $book->author_id, 'authors' => $authors]);
+    }
+
+    public function loadBook()
+    {
+        $authors = AuthorController::getAll();
+        return view('load_book', ['authors' => $authors]);
+    }
+
+    public function get_photos(int $id)
+    {
+        $book = Book::findOrFail($id);
+        $photos = $book->photos->toArray();
+        return view('books_photos', ['photos' => $photos, 'book_id' => $id]);
+    }
+
+
+
 }

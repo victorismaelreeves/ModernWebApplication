@@ -1,8 +1,8 @@
 <?php
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 class CreateBooksTable extends Migration
 {
@@ -14,11 +14,10 @@ class CreateBooksTable extends Migration
     public function up()
     {
         Schema::create('books', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->string('title', 150);
-            $table->bigInteger("author_id", false, true);
-            $table->foreign('author_id')->references('id')
-                ->on('authors');
+            $table->id();
+            $table->string('Name');
+            $table->foreignId('author_id')->constrained('authors');
+            $table->unsignedInteger('pages');
             $table->timestamps();
         });
     }

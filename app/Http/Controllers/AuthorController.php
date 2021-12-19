@@ -2,112 +2,87 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Author;
+use App\Models\Book;
 use Illuminate\Http\Request;
-use App\Author;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Redirect;
 
 class AuthorController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index()
+    public function __construct()
     {
-        $authors = Author::all();
 
-        return view('authors.index', ['authors' => $authors]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
+
+
+    public function index(Request $request)
     {
-        return view('authors.form');
+        $sort_by = $request->input('sort_by', 'id');
+        $order = $request->input('order', 'ASC');
+        $paginate = $request->input('paginate', 5);
+        $authors = Author::orderBy($sort_by, $order)->paginate($paginate);
+
+        return view('authors', ['authors' => $authors, 'keys' => ['id', 'name']]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+
+    public static function getAll()
     {
-        $request->validate([
-            'name' => 'required',
-        ]);
-        $author = new Author([
-            'full_name' => $request->get('name'),
-        ]);
-        $author->save();
-        return redirect('/authors')->with('success', 'Author has been added');
+        return Author::all(['id', 'name'])->toArray();
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param int $id
-     * @return \Illuminate\Http\Response
-     */
-    public function show(Author $author)
+    public function get(int $id)
     {
-        return $author;
+        $author = Author::with(['books'])->findOrFail($id);
+        return view('author_details', ['author' => $author]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param int $id
-     * @return \Illuminate\Http\Response
-     */
-    public function edit($id)
+    public function save(Request $request, int $id = null)
     {
-        $author = Author::find($id);
+        $fields = $request->toArray();
+        if(isset($fields['_token'])) {
+            unset($fields['_token']);
+        }
+        if($id === null){
+            $author = Author::factory()->create($fields);
+        }
+        else{
+            $author = Author::findOrFail($id);
+            foreach ($fields as $key => $val){
+                $author->$key = $val;
+            }
+            $author->save();
+        }
 
-        return view(
-            'authors.form_edit',
-            [
-                'author' => $author,
-            ]
+        return redirect()->action(
+            [AuthorController::class, 'get'], ['id' => $author->id]
         );
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param \Illuminate\Http\Request $request
-     * @param int $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
+    public function delete(int $id)
     {
-        $request->validate([
-            'name' => 'required',
-        ]);
+        $author = Author::findOrFail($id);
 
-        $author = Author::find($id);
-        $author->full_name = $request->get('name');
-        $author->save();
+        if($author->books()->count() > 0){
+            return Redirect::back()->withErrors(['msg' => 'The author has books and cant be deleted.']);
+        }
 
-        return redirect('/authors')->with('success', 'Author has been updated');
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param int $id
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy($id)
-    {
-        $author = Author::find($id);
         $author->delete();
 
-        return redirect('/books')->with('success', 'Book has been deleted');
+        return redirect()->action([AuthorController::class, 'index']);
     }
+
+    public function edit(int $id)
+    {
+        $author = Author::findOrFail($id);
+        return view('edit_author', ['id' => $id, 'name' => $author->name]);
+    }
+
+    public function loadAuthor()
+    {
+        return view('load_author');
+    }
+
 }
